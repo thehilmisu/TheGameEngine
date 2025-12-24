@@ -1,21 +1,23 @@
 #include "engine.h"
 #include <raymath.h>
 
-Registry registry_init(void) {
+Registry registry_init(void) 
+{
     Registry reg = {0};
     return reg;
 }
 
-Entity registry_create_entity(Registry *reg) {
+Entity registry_create_entity(Registry *reg) 
+{
     Entity entity = {0};
 
     entity.id = (uint32_t)(reg->count + 1);
     
-    if (reg->count >= reg->capacity) {
+    if (reg->count >= reg->capacity) 
+    {
         size_t new_capacity = reg->capacity == 0 ? 256 : reg->capacity * 2;
         reg->entities = NOB_REALLOC(reg->entities, new_capacity * sizeof(*reg->entities));
-        reg->editors = NOB_REALLOC(reg->editors, new_capacity * sizeof(*reg->editors));
-        NOB_ASSERT(reg->entities && reg->editors);
+        NOB_ASSERT(reg->entities);
         reg->capacity = new_capacity;
     }
 
@@ -37,33 +39,36 @@ Entity registry_create_entity(Registry *reg) {
     
     entity.transform = transform;
     entity.mesh = mesh;
+    entity.editor = editor;
     reg->entities[reg->count] = entity;
-    reg->editors[reg->count] = editor;
     reg->count++;
     
     return entity;
 }
 
-void registry_free(Registry *reg) {
+void registry_free(Registry *reg) 
+{
     NOB_FREE(reg->entities);
-    NOB_FREE(reg->editors);
     memset(reg, 0, sizeof(Registry));
 }
 
 // --- Systems Implementation ---
 
-void system_render(Registry *reg, Camera3D camera) {
+void system_render(Registry *reg, Camera3D camera) 
+{
     BeginMode3D(camera);
-    for (size_t i = 0; i < reg->count; ++i) {
+    for (size_t i = 0; i < reg->count; ++i) 
+    {
         TransformComponent *t = &reg->entities[i].transform;
         MeshComponent *m = &reg->entities[i].mesh;
-        EditorComponent *e = &reg->editors[i];
+        EditorComponent *e = &reg->entities[i].editor;
         
         Color color = m->color;
         if (e->is_selected) color = GREEN;
         else if (e->is_hovered) color = YELLOW;
         
-        switch (m->type) {
+        switch (m->type) 
+        {
             case MESH_CUBE:
                 DrawCube(t->position, t->scale.x, t->scale.y, t->scale.z, color);
                 DrawCubeWires(t->position, t->scale.x, t->scale.y, t->scale.z, MAROON);
@@ -81,7 +86,8 @@ void system_render(Registry *reg, Camera3D camera) {
     EndMode3D();
 }
 
-static void draw_gizmo(Vector3 pos, GizmoAxis active) {
+static void draw_gizmo(Vector3 pos, GizmoAxis active) 
+{
     float len = 2.0f;
     float thickness = 0.1f;
     
@@ -101,7 +107,8 @@ static void draw_gizmo(Vector3 pos, GizmoAxis active) {
     DrawCube((Vector3){pos.x, pos.y, pos.z + len}, thickness*2, thickness*2, thickness*2, z_color);
 }
 
-static GizmoAxis check_gizmo_collision(Ray ray, Vector3 pos) {
+static GizmoAxis check_gizmo_collision(Ray ray, Vector3 pos) 
+{
     float len = 2.0f;
     float thickness = 0.2f;
     
@@ -140,20 +147,25 @@ static float get_axis_drag_t(Ray ray, Vector3 pos, Vector3 axis) {
 void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
     Ray ray = GetScreenToWorldRay(GetMousePosition(), camera);
     
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) 
+    {
         bool hit_gizmo = false;
-        if (editor->selected_entity.id != ENTITY_INVALID) {
+        if (editor->selected_entity.id != ENTITY_INVALID) 
+        {
             size_t idx = 0;
             bool found = false;
-            for (size_t i = 0; i < reg->count; ++i) {
-                if (reg->entities[i].id == editor->selected_entity.id) {
+            for (size_t i = 0; i < reg->count; ++i) 
+            {
+                if (reg->entities[i].id == editor->selected_entity.id) 
+                {
                     idx = i;
                     found = true;
                     break;
                 }
             }
             
-            if (found) {
+            if (found) 
+            {
                 GizmoAxis axis = check_gizmo_collision(ray, reg->entities[idx].transform.position);
                 if (axis != GIZMO_NONE) {
                     editor->active_axis = axis;
@@ -169,12 +181,13 @@ void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
             }
         }
         
-        if (!hit_gizmo) {
+        if (!hit_gizmo) 
+        {
             editor->selected_entity.id = ENTITY_INVALID;
             editor->active_axis = GIZMO_NONE;
             for (size_t i = 0; i < reg->count; ++i) {
                 TransformComponent *t = &reg->entities[i].transform;
-                EditorComponent *e = &reg->editors[i];
+                EditorComponent *e = &reg->entities[i].editor;
                 
                 BoundingBox box = {
                     (Vector3){ t->position.x - t->scale.x/2, t->position.y - t->scale.y/2, t->position.z - t->scale.z/2 },
@@ -193,11 +206,13 @@ void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
         }
     }
     
-    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) 
+    {
         editor->active_axis = GIZMO_NONE;
     }
     
-    if (editor->active_axis != GIZMO_NONE && editor->selected_entity.id != ENTITY_INVALID) {
+    if (editor->active_axis != GIZMO_NONE && editor->selected_entity.id != ENTITY_INVALID) 
+    {
         size_t idx = 0;
         bool found = false;
         for (size_t i = 0; i < reg->count; ++i) {
@@ -208,7 +223,8 @@ void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
             }
         }
         
-        if (found) {
+        if (found) 
+        {
             Vector3 axis_vec = {0};
             if (editor->active_axis == GIZMO_X) axis_vec = (Vector3){1, 0, 0};
             if (editor->active_axis == GIZMO_Y) axis_vec = (Vector3){0, 1, 0};
@@ -223,17 +239,21 @@ void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
 }
 
 void system_editor_render(Registry *reg, EditorState *editor, Camera3D camera) {
-    if (editor->selected_entity.id != ENTITY_INVALID) {
+    if (editor->selected_entity.id != ENTITY_INVALID) 
+    {
         size_t idx = 0;
         bool found = false;
-        for (size_t i = 0; i < reg->count; ++i) {
-            if (reg->entities[i].id == editor->selected_entity.id) {
+        for (size_t i = 0; i < reg->count; ++i) 
+        {
+            if (reg->entities[i].id == editor->selected_entity.id) 
+            {
                 idx = i;
                 found = true;
                 break;
             }
         }
-        if (found) {
+        if (found) 
+        {
             BeginMode3D(camera);
             draw_gizmo(reg->entities[idx].transform.position, editor->active_axis);
             EndMode3D();

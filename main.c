@@ -1,9 +1,12 @@
 #include <stdbool.h>
 #include <raylib.h>
 #include "engine.h"
+#include "camera.h"
+#include "colors.h"
+#include "voxel_space_map.h"
 
-#define SCREEN_WIDTH    (800)
-#define SCREEN_HEIGHT   (450)
+#define SCREEN_WIDTH    (1920)
+#define SCREEN_HEIGHT   (1080)
 
 int main(void)
 {
@@ -22,18 +25,13 @@ int main(void)
     reg.entities[1].transform.position = (Vector3){5, 0, 0};
     reg.entities[1].mesh.color = BLUE;
 
+    init_camera();
+    init_map();
 
-    Camera3D camera = {0};
-    camera.position = (Vector3){ 10.0f, 10.0f, 10.0f };
-    camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    camera.fovy = 45.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-
-    Color clear_color = { .r = 0xCD, .g = 0xCD, .b = 0xCD, .a = 0xFF };
+    Color clear_color = CLEAR_COLOR;
     
     SetConfigFlags(FLAG_WINDOW_UNDECORATED);
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "ECS Engine + Gizmos");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Game Engine");
     SetTargetFPS(60);
 
     while (!WindowShouldClose())
@@ -41,14 +39,17 @@ int main(void)
         // Update
         if (IsKeyPressed(KEY_Q)) break;
         
-        system_editor_update(&reg, &editor, camera);
-
+        update_camera();
+        system_editor_update(&reg, &editor, get_camera());
+    
+        
         // Render
         BeginDrawing();
             ClearBackground(clear_color);
+            draw_map();
             
-            system_render(&reg, camera);
-            system_editor_render(&reg, &editor, camera);
+            system_render(&reg, get_camera());
+            system_editor_render(&reg, &editor, get_camera());
             
             DrawFPS(10, 10);
             DrawText("Press Q to Quit", 10, 30, 20, DARKGRAY);

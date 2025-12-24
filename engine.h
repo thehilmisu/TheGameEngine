@@ -24,27 +24,31 @@ typedef enum
     MESH_PLANE
 } MeshType;
 
-typedef struct {
+typedef struct 
+{
     MeshType type;
     Color color;
 } MeshComponent;
+
+typedef struct 
+{
+    bool is_selected;
+    bool is_hovered;
+} EditorComponent;
 
 typedef struct
 {
     uint32_t id;
     TransformComponent transform;
     MeshComponent mesh;
+    EditorComponent editor;
 }Entity;
 
-typedef struct {
-    bool is_selected;
-    bool is_hovered;
-} EditorComponent;
 
 // Component Arrays (SoA - Structure of Arrays style for ECS-Lite)
-typedef struct {
+typedef struct 
+{
     Entity *entities;
-    EditorComponent *editors;
     size_t count;
     size_t capacity;
 } Registry;
