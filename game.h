@@ -21,13 +21,15 @@ typedef enum
 {
     MESH_CUBE,
     MESH_SPHERE,
-    MESH_PLANE
+    MESH_PLANE,
+    MESH_MODEL
 } MeshType;
 
 typedef struct 
 {
     MeshType type;
     Color color;
+    Model model;
 } MeshComponent;
 
 typedef struct 
@@ -61,6 +63,7 @@ typedef struct
 
 Game game_init(void);
 Entity create_entity(Game *game);
+Entity create_entity_with_model(Game *game, const char* model_path);
 void game_free(Game *game);
 
 // --- Component Helpers (using bitsets or indices, simplified here) ---

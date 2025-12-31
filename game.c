@@ -46,6 +46,50 @@ Entity create_entity(Game *game)
     return entity;
 }
 
+Entity create_entity_with_model(Game *game, const char* model_path) 
+{
+    Entity entity = {0};
+
+    entity.id = (uint32_t)(game->reg.count + 1);
+    
+    if (game->reg.count >= game->reg.capacity) 
+    {
+        size_t new_capacity = game->reg.capacity == 0 ? 256 : game->reg.capacity * 2;
+        game->reg.entities = NOB_REALLOC(game->reg.entities, new_capacity * sizeof(*game->reg.entities));
+        NOB_ASSERT(game->reg.entities);
+        game->reg.capacity = new_capacity;
+    }
+
+    TransformComponent transform = {
+        .position = {0, 0, 0},
+        .rotation = {0, 0, 0},
+        .scale = {1, 1, 1}
+    };
+    
+    Model m = LoadModel(model_path);
+    if (m.meshCount == 0) {
+        TraceLog(LOG_ERROR, "GAME: Failed to load model from %s", model_path);
+    }
+    MeshComponent mesh = {
+        .type = MESH_MODEL,
+        .color = WHITE,
+        .model = m
+    };
+    
+    EditorComponent editor = {
+        .is_selected = false,
+        .is_hovered = false
+    };
+    
+    entity.transform = transform;
+    entity.mesh = mesh;
+    entity.editor = editor;
+    game->reg.entities[game->reg.count] = entity;
+    game->reg.count++;
+    
+    return entity;
+}
+
 void game_free(Game *game) 
 {
     NOB_FREE(game->reg.entities);
@@ -78,6 +122,10 @@ void game_render(Game *game, Camera3D *camera)
             case MESH_PLANE:
                 DrawPlane(t->position, (Vector2){t->scale.x, t->scale.z}, color);
                 break;
+            case MESH_MODEL:
+                DrawModel(m->model, t->position, t->scale.x, WHITE);
+                break;
+
         }
     }
 

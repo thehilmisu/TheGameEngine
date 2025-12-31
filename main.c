@@ -8,27 +8,33 @@
 #define SCREEN_WIDTH    (1920)
 #define SCREEN_HEIGHT   (1080)
 
+
 int main(void)
 {
+    Entity* player = NULL;
+
     // Initialize Registry and Editor State
     Game game = game_init();
     EditorState editor = {0};
     editor.active_axis = GIZMO_NONE;
     editor.selected_entity.id = ENTITY_INVALID;
 
-    // Add some initial entities
-    create_entity(&game);
-    game.reg.entities[0].transform.position = (Vector3){512, 150, 512};
-    game.reg.entities[0].mesh.color = RED;
-
     init_camera();
-    set_camera_target(game.reg.entities[0].transform.position);
 
     Color clear_color = CLEAR_COLOR;
     
     SetConfigFlags(FLAG_WINDOW_UNDECORATED);
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Game Engine");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "The Game");
     SetTargetFPS(60);
+
+    // Add some initial entities (MUST BE AFTER InitWindow for models to load)
+    create_entity_with_model(&game, "resources/models/aircraft.glb");
+    game.reg.entities[0].transform.position = (Vector3){512, 150, 512};
+    game.reg.entities[0].mesh.color = WHITE;
+    player = &game.reg.entities[0];
+
+    //set_camera_target(game.reg.entities[0].transform.position);
+    set_camera_target(player->transform.position);
 
     init_map();
 
@@ -36,7 +42,8 @@ int main(void)
     {
         // Update
         game_update(&game, GetFrameTime());
-        set_camera_target(game.reg.entities[0].transform.position);
+        //set_camera_target(game.reg.entities[0].transform.position);
+        set_camera_target(player->transform.position);
         update_camera();
         
         // Render
