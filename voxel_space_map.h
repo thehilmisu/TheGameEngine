@@ -11,21 +11,8 @@
 #define SCALE_FACTOR 100.0
 #define NUM_MAPS 29
 
-
-typedef struct {
-    float x;
-    float y;
-    float height;
-    float angle;
-    float horizon;
-    float speed;
-    float rotspeed;
-    float heightspeed;
-    float horizonspeed;
-    float tiltspeed;
-    float tilt;
-    float zfar;
-} camera_t;
+#define RENDER_WIDTH 960
+#define RENDER_HEIGHT 540
 
 typedef struct {
     char colorMap[50];
@@ -46,6 +33,8 @@ char* DropdownOptions();
 
 void init_map();
 
-void draw_map(); 
+void render_map(); 
+
+void cleanup_map();
 
 #endif

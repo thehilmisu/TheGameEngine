@@ -1,25 +1,22 @@
 #include "voxel_space_map.h"
+#include "camera.h"
+#include <math.h>
 
 Color *colorMap = NULL;
 Color *heightMap = NULL;
-Image colorMapImage = {0};// LoadImage(maps[selectedMap].colorMap);
+Color *screenBuffer = NULL;
+Texture2D screenTexture = { 0 };
+Image colorMapImage = {0};
 Image heightMapImage = {0}; // LoadImage(maps[selectedMap].heightMap);
 
-camera_t camera = {
-    .x = 512,
-    .y = 512,
-    .height = 150,
-    .angle = 1.5 * 3.141592,
-    .horizon = 100,
-    .speed = 60,
-    .rotspeed = 0.5,
-    .heightspeed = 100,
-    .horizonspeed = 100,
-    .tiltspeed = 1.5,
-    .tilt = 0,
-    .zfar = 600
-};
+float voxel_horizon = 100.0f;
+float voxel_tilt = 0.0f;
+float voxel_zfar = 600.0f;
 
+// Pre-calculated tables for optimization
+static float fogTable[1024];
+static float invZTable[1024];
+static float currentFogDensity = -1.0f;
 
 map_t maps[NUM_MAPS];
 
@@ -31,50 +28,7 @@ int selectedMap = 0;
 int currentSelectedMap = 0;
 int mapSelectorMode = 0;
 
-void ProcessInput(float timeDelta) 
-{
-    if (IsKeyDown(KEY_UP)) {
-        camera.x += camera.speed * cos(camera.angle) * timeDelta;
-        camera.y += camera.speed * sin(camera.angle) * timeDelta;
-    }
-    if (IsKeyDown(KEY_DOWN)) {
-        camera.x -= camera.speed * cos(camera.angle) * timeDelta;
-        camera.y -= camera.speed * sin(camera.angle) * timeDelta;
-    }
-    if (IsKeyDown(KEY_LEFT)) {
-        camera.angle -= camera.rotspeed * timeDelta;
-    }
-    if (IsKeyDown(KEY_RIGHT)) {
-        camera.angle += camera.rotspeed * timeDelta;
-    }
-    if (IsKeyDown(KEY_Q)) {
-        camera.height += camera.heightspeed * timeDelta;
-    }
-    if (IsKeyDown(KEY_E)) {
-        camera.height -= camera.heightspeed * timeDelta;
-    }
-    if (IsKeyDown(KEY_W)) {
-        camera.horizon += camera.horizonspeed * timeDelta;
-    }
-    if (IsKeyDown(KEY_S)) {
-        camera.horizon -= camera.horizonspeed * timeDelta;
-    }
-    if (IsKeyDown(KEY_A)) {
-        camera.tilt -= camera.tiltspeed * timeDelta;
-        camera.tilt = camera.tilt < -1 ? -1 : camera.tilt;
-    }
-    if (IsKeyDown(KEY_D)) {
-        camera.tilt += camera.tiltspeed * timeDelta;
-        camera.tilt = camera.tilt > 1 ? 1 : camera.tilt;
-    }
 
-    if (IsKeyDown(KEY_R)) {
-        camera.angle = 1.5 * 3.141592;
-        camera.tilt = 0;
-        camera.height = 150;
-        camera.horizon = 100;
-    }
-}
 
 int GetLinearFogFactor(int fogEnd, int fogStart, int z) 
 {
@@ -126,125 +80,224 @@ void LoadMaps()
 
 char* DropdownOptions() 
 {
-    char *dropDownText = malloc(NUM_MAPS*6);
-    for (size_t i = 0; i < NUM_MAPS; i++) {
-        char mapName[6];
-        sprintf(mapName, "map%i", (int)i);
-        sprintf(dropDownText, "%s;%s", dropDownText, mapName);
+    // NUM_MAPS is 29. "mapXX;" is up to 7 characters including semicolon/null.
+    char *dropDownText = (char *)calloc(NUM_MAPS, 8);
+    if (!dropDownText) return NULL;
+
+    int offset = 0;
+    for (int i = 0; i < NUM_MAPS; i++) {
+        offset += sprintf(dropDownText + offset, "map%d", i);
+        if (i < NUM_MAPS - 1) {
+            dropDownText[offset++] = ';';
+        }
     }
-    return dropDownText + 1;
+    return dropDownText;
 }
 
 
 void init_map()
 {
     LoadMaps();
-    char *dropDownText = DropdownOptions();
 
-    Image colorMapImage = LoadImage(maps[selectedMap].colorMap);
-    Image heightMapImage = LoadImage(maps[selectedMap].heightMap);
+    Image colorMapImg = LoadImage(maps[selectedMap].colorMap);
+    Image heightMapImg = LoadImage(maps[selectedMap].heightMap);
 
-    colorMap = LoadImageColors(colorMapImage);
-    heightMap = LoadImageColors(heightMapImage);
+    if (colorMapImg.data == NULL || heightMapImg.data == NULL) {
+        TraceLog(LOG_ERROR, "VOXEL: Failed to load map files. Check if 'resources' directory exists in working directory.");
+    } else {
+        colorMap = LoadImageColors(colorMapImg);
+        heightMap = LoadImageColors(heightMapImg);
+    }
 
+    UnloadImage(colorMapImg);
+    UnloadImage(heightMapImg);
+
+    screenBuffer = (Color *)malloc(RENDER_WIDTH * RENDER_HEIGHT * sizeof(Color));
+    if (screenBuffer) {
+        for (int i = 0; i < RENDER_WIDTH * RENDER_HEIGHT; i++) screenBuffer[i] = BLACK;
+    }
+    
+    // Create an image that references the screenBuffer
+    // We will use this to initialize the texture
+    Image screenImage = {
+        .data = screenBuffer,
+        .width = RENDER_WIDTH,
+        .height = RENDER_HEIGHT,
+        .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+        .mipmaps = 1
+    };
+
+    screenTexture = LoadTextureFromImage(screenImage);
 }
 
-void draw_map() 
+void render_map() 
 {
-    
+    // Sync with engine camera
+    Camera3D *engineCamera = get_camera();
 
-        // Switch color map and height map if user choses a different map
-        if (currentSelectedMap != selectedMap) {
-            selectedMap = currentSelectedMap;
-            colorMapImage = LoadImage(maps[selectedMap].colorMap);
-            heightMapImage = LoadImage(maps[selectedMap].heightMap);
-            colorMap = LoadImageColors(colorMapImage);
-            heightMap = LoadImageColors(heightMapImage);
+    float camX = engineCamera->position.x;
+    float camY = engineCamera->position.z; 
+    float camHeight = engineCamera->position.y;
+    float camAngle = atan2f(engineCamera->target.z - engineCamera->position.z, engineCamera->target.x - engineCamera->position.x);
+
+    // Calculate fractional movement to fix Z-judder
+    // We assume the forward direction is roughly aligned with the camera target
+    float dirX = engineCamera->target.x - engineCamera->position.x;
+    float dirZ = engineCamera->target.z - engineCamera->position.z;
+    float dirLen = sqrtf(dirX*dirX + dirZ*dirZ);
+    if (dirLen > 0) {
+        dirX /= dirLen;
+        dirZ /= dirLen;
+    }
+
+    // depthOffset is how much we have moved "into" the current map grid unit
+    // along the look direction.
+    float depthOffset = (camX * dirX + camY * dirZ);
+    depthOffset -= floorf(depthOffset);
+
+    // Switch color map and height map if user chooses a different map
+    if (currentSelectedMap != selectedMap) {
+        selectedMap = currentSelectedMap;
+        Image colorMapImg = LoadImage(maps[selectedMap].colorMap);
+        Image heightMapImg = LoadImage(maps[selectedMap].heightMap);
+        
+        if (colorMap) UnloadImageColors(colorMap);
+        if (heightMap) UnloadImageColors(heightMap);
+        
+        colorMap = LoadImageColors(colorMapImg);
+        heightMap = LoadImageColors(heightMapImg);
+        
+        UnloadImage(colorMapImg);
+        UnloadImage(heightMapImg);
+    }
+
+    // Pre-calculate tables if needed
+    if (currentFogDensity != fogDensity) {
+        for (int z = 0; z < 1024; z++) {
+            fogTable[z] = 1.0f / expf(z * fogDensity);
+            invZTable[z] = 1.0f / (float)(z > 0 ? z : 1);
         }
+        currentFogDensity = fogDensity;
+    }
 
-        // use time passed since last frame drawn to calculate distances
-        // for movements
-        float timeDelta = GetFrameTime();
-        // ProcessInput(timeDelta);
+    // Clear backbuffer
+    for (int i = 0; i < RENDER_WIDTH * RENDER_HEIGHT; i++) {
+        screenBuffer[i] = (Color){ 0, 0, 0, 0 }; // Transparent clear
+    }
 
-        float sinangle = sin(camera.angle);
-        float cosangle = cos(camera.angle);
+    float sinangle = sin(camAngle);
+    float cosangle = cos(camAngle);
 
-        /*
-        Here we begin with our voxel space rendering algorith. I will try to explain how it works but willa void too much
-        details since several good articles online.
-        The first thing we need is a camera, we need to decide our field of view (FOV) and the distance we can see in the
-        z direction (zfar). 90 degree or pi/2 is a good FOV.
+    float plx = cosangle * voxel_zfar + sinangle * voxel_zfar;
+    float ply = sinangle * voxel_zfar - cosangle * voxel_zfar;
 
-            (plx,ply)       zfar        (prx,pry)
-                 \            |            /
-                   \          |          /
-                     \        |        /
-                       \      |      /
-                         \    |    /
-                           \  |  /
-                             \|/
-                            (x, y)
+    float prx = cosangle * voxel_zfar - sinangle * voxel_zfar;
+    float pry = sinangle * voxel_zfar + cosangle * voxel_zfar;
 
-        This is how the camera and the extreme left and right casted rays look when the camera is facing up along y axis. In order
-        to account for camera rotation we will have to utilise 2d vector rotation.
-        Next we divide the distance between the two points of the extreme rays by the width of our screen and then for each
-        column we cast a ray. Then along each such ray we go pixel by pixel and fetch the pixels color and height value from the
-        color map and the height map. Once we have the pixel and height we draw the pixel at the appropriate position using the
-        ray colum as x and height as y.
-        Okay we do not use the exact height we are getting from the height map but rather using that height we calculate something
-        called the projected height where we also consider the zfar value that is how far looking into the z axis to give it a feel
-        of perspective.
-        We render the pixels front to back, what this essentially mean is if we find a pixel whose projected height is less than a
-        previous pixel, then we dont render the pixel because anywats it wont be visible on the screen. And that is pretty much
-        the crux of voxel space algorithm.
-        */
-        float plx = cosangle * camera.zfar + sinangle * camera.zfar;
-        float ply = sinangle * camera.zfar - cosangle * camera.zfar;
+    float inv_zfar = 1.0f / voxel_zfar;
+    float inv_render_width = 1.0f / (float)RENDER_WIDTH;
+    int zfar_int = (int)voxel_zfar;
+    if (zfar_int > 1024) zfar_int = 1024;
 
-        float prx = cosangle * camera.zfar - sinangle * camera.zfar;
-        float pry = sinangle * camera.zfar + cosangle * camera.zfar;
- 
-        for (size_t i = 0; i < 1920; i++) {
-            float deltaX = (plx + (prx - plx) / 1920 * i) / camera.zfar;
-            float deltaY = (ply + (pry - ply) / 1920 * i) / camera.zfar;
+    // Use fractional Y (depth) to offset the starting sampling position
+    // We offset the start to align exactly with the camera world position
+    float startRX = camX;
+    float startRY = camY;
 
-            float rx = camera.x;
-            float ry = camera.y;
+    // Adjust start position by one half step to center sampling on the first slice
+    // This further stabilizes the forward movement
+    float initialStep = 1.0f - depthOffset;
+    
+    for (int i = 0; i < RENDER_WIDTH; i++) {
+        float deltaX = (plx + (prx - plx) * i * inv_render_width) * inv_zfar;
+        float deltaY = (ply + (pry - ply) * i * inv_render_width) * inv_zfar;
 
-            float maxHeight = 1080;
+        float rx = startRX + deltaX * initialStep;
+        float ry = startRY + deltaY * initialStep;
 
-            for (size_t z = 1; z < camera.zfar; z++) {
-                rx += deltaX;
-                ry += deltaY;
+        float maxHeight = (float)RENDER_HEIGHT;
+        float lean = (voxel_tilt * (i * inv_render_width - 0.5f) + 0.5f) * RENDER_HEIGHT / 6.0f;
 
-                int mapoffset = (MAP_N * ((int)(ry) & (MAP_N - 1))) + ((int)(rx) & (MAP_N - 1));
-                int projHeight = (int)((camera.height - heightMap[mapoffset].r) / z * SCALE_FACTOR + camera.horizon);
-                projHeight = projHeight < 0 ? 0: projHeight;
-                projHeight = projHeight > 1080 ? 1080 - 1: projHeight;
+        for (int z = 1; z < zfar_int; z++) {
+            rx += deltaX;
+            ry += deltaY;
+
+            if (heightMap && colorMap) {
+                // Bilinear interpolation for smooth height sampling
+                float floorX = floorf(rx);
+                float floorY = floorf(ry);
+                float fx = rx - floorX;
+                float fy = ry - floorY;
+                
+                int x0 = ((int)floorX) & (MAP_N - 1);
+                int y0 = ((int)floorY) & (MAP_N - 1);
+                int x1 = (x0 + 1) & (MAP_N - 1);
+                int y1 = (y0 + 1) & (MAP_N - 1);
+
+                float h00 = heightMap[y0 * MAP_N + x0].r;
+                float h10 = heightMap[y0 * MAP_N + x1].r;
+                float h01 = heightMap[y1 * MAP_N + x0].r;
+                float h11 = heightMap[y1 * MAP_N + x1].r;
+
+                // Bilinear blend
+                float h = h00 * (1.0f - fx) * (1.0f - fy) + 
+                          h10 * fx * (1.0f - fy) + 
+                          h01 * (1.0f - fx) * fy + 
+                          h11 * fx * fy;
+                
+                // Use a continuous distance for projection to eliminate Z-judder
+                // We subtract the fractional progress into the current grid cell
+                float continuousZ = (float)z - depthOffset;
+                if (continuousZ < 0.1f) continuousZ = 0.1f;
+                
+                int projHeight = (int)((camHeight - h) / continuousZ * SCALE_FACTOR + voxel_horizon);
+                if (projHeight < 0) projHeight = 0;
+                if (projHeight >= RENDER_HEIGHT) projHeight = RENDER_HEIGHT - 1;
 
                 if (projHeight < maxHeight) {
-                    float lean = (camera.tilt * (i / (float)1920 - 0.5) + 0.5) * 1080 / 6;
+                    float fogFactor = fogTable[z];
+                    // Still sample color from nearest to keep it fast
+                    int mapoffset = (MAP_N * y0) + x0;
+                    Color pixel = colorMap[mapoffset];
+                    Color scaledPixel = GetScaledPixel(pixel, (Color){180, 180, 180, 255}, fogFactor);
 
-                    for (size_t y = (projHeight + lean); y < (maxHeight + lean); y++) {
-                        Color pixel = colorMap[mapoffset];
-
-                        // Here we scale our pixel to introduce fog.
-                        Color scaledPixel = GetScaledPixel(pixel, (Color){180, 180, 180, 255}, GetExponentialFogFactor(fogDensity, z));
-                        if (fogType == 1) {
-                            if (fogEnd <= fogStart) {
-                                fogEnd = fogStart + 1;
-                            }
-                            scaledPixel = GetScaledPixel(pixel, (Color){180, 180, 180, 100}, GetLinearFogFactor((int)fogEnd, (int)fogStart, z));
-                        }
-
-                        DrawPixel(i, y, scaledPixel);
+                    if (fogType == 1) {
+                        float fStart = fogStart;
+                        float fEnd = fogEnd;
+                        if (fEnd <= fStart) fEnd = fStart + 1.0f;
+                        scaledPixel = GetScaledPixel(pixel, (Color){180, 180, 180, 100}, GetLinearFogFactor((int)fEnd, (int)fStart, z));
                     }
-                    maxHeight = projHeight;
+
+                    int startY = (int)(projHeight + lean);
+                    int endY = (int)(maxHeight + lean);
+                    
+                    if (startY < 0) startY = 0;
+                    if (endY > RENDER_HEIGHT) endY = RENDER_HEIGHT;
+
+                    if (screenBuffer) {
+                        for (int y = startY; y < endY; y++) {
+                            screenBuffer[y * RENDER_WIDTH + i] = scaledPixel;
+                        }
+                    }
+                    maxHeight = (float)projHeight;
                 }
             }
         }
+    }
 
+    // Update texture and draw upscaled
+    UpdateTexture(screenTexture, screenBuffer);
+    DrawTexturePro(screenTexture, 
+        (Rectangle){ 0, 0, RENDER_WIDTH, RENDER_HEIGHT },
+        (Rectangle){ 0, 0, GetScreenWidth(), GetScreenHeight() },
+        (Vector2){ 0, 0 }, 0.0f, WHITE);
+}
 
+void cleanup_map()
+{
+    if (colorMap) UnloadImageColors(colorMap);
+    if (heightMap) UnloadImageColors(heightMap);
+    if (screenBuffer) free(screenBuffer);
+    UnloadTexture(screenTexture);
 }
 

@@ -10,6 +10,6 @@ void set_camera_target(Vector3 target);
 void set_camera_up(Vector3 up);
 void set_camera_fovy(float angle);
 void set_camera_projection(void);
-Camera3D get_camera(void);
+Camera3D *get_camera(void);
 
 #endif // CAMERA_H

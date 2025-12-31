@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     cmd_append(&cmd, "-framework", "GLUT");
     cmd_append(&cmd, "-framework", "OpenGL");
     cmd_append(&cmd, "-I./raylib-5.5_macos/include/");
-    cmd_append(&cmd, "-o", BUILD_FOLDER"main", "main.c", "engine.c", "camera.c", "voxel_space_map.c");
+    cmd_append(&cmd, "-o", BUILD_FOLDER"main", "main.c", "game.c", "camera.c", "voxel_space_map.c");
     cmd_append(&cmd, "./raylib-5.5_macos/lib/libraylib.a");
     cmd_append(&cmd, "-lm");
     

@@ -14,7 +14,7 @@ void init_camera(void)
 void update_camera(void)
 {
     // Orbital camera for editor navigation
-    UpdateCamera(&camera, CAMERA_ORBITAL);
+    //UpdateCamera(&camera, CAMERA_FREE);
 }
 
 void set_camera_position(Vector3 pos)
@@ -25,6 +25,8 @@ void set_camera_position(Vector3 pos)
 void set_camera_target(Vector3 target)
 {
     camera.target = target;
+    // Follow from behind and slightly above
+    camera.position = (Vector3){target.x, target.y + 15.0f, target.z - 30.0f};
 }
 
 void set_camera_up(Vector3 up)
@@ -42,7 +44,7 @@ void set_camera_projection(void)
     camera.projection = CAMERA_PERSPECTIVE;
 }
 
-Camera3D get_camera(void)
+Camera3D *get_camera(void)
 {
-    return camera;
+    return &camera;
 }

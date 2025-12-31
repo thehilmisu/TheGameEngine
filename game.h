@@ -1,5 +1,5 @@
-#ifndef ENGINE_H
-#define ENGINE_H
+#ifndef GAME_H
+#define GAME_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -45,7 +45,6 @@ typedef struct
 }Entity;
 
 
-// Component Arrays (SoA - Structure of Arrays style for ECS-Lite)
 typedef struct 
 {
     Entity *entities;
@@ -53,11 +52,16 @@ typedef struct
     size_t capacity;
 } Registry;
 
+typedef struct
+{
+    Registry reg;
+}Game;
+
 // --- Registry API ---
 
-Registry registry_init(void);
-Entity registry_create_entity(Registry *reg);
-void registry_free(Registry *reg);
+Game game_init(void);
+Entity create_entity(Game *game);
+void game_free(Game *game);
 
 // --- Component Helpers (using bitsets or indices, simplified here) ---
 // For this lite version, every entity will have an entry in all component arrays 
@@ -81,9 +85,10 @@ typedef struct
     Entity selected_entity;
 } EditorState;
 
-void system_render(Registry *reg, Camera3D camera);
-void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera);
-void system_editor_render(Registry *reg, EditorState *editor, Camera3D camera);
+void game_render(Game *game, Camera3D *camera);
+void game_update(Game *game, float timeDelta);
+void editor_update(Game *game, EditorState *editor, Camera3D *camera);
+void system_editor_render(Registry *reg, EditorState *editor, Camera3D *camera);
 
-#endif // ENGINE_H
+#endif // GAME_H
 

@@ -1,24 +1,24 @@
-#include "engine.h"
+#include "game.h"
 #include <raymath.h>
 
-Registry registry_init(void) 
+Game game_init(void) 
 {
-    Registry reg = {0};
-    return reg;
+    Game game = {0};
+    return game;
 }
 
-Entity registry_create_entity(Registry *reg) 
+Entity create_entity(Game *game) 
 {
     Entity entity = {0};
 
-    entity.id = (uint32_t)(reg->count + 1);
+    entity.id = (uint32_t)(game->reg.count + 1);
     
-    if (reg->count >= reg->capacity) 
+    if (game->reg.count >= game->reg.capacity) 
     {
-        size_t new_capacity = reg->capacity == 0 ? 256 : reg->capacity * 2;
-        reg->entities = NOB_REALLOC(reg->entities, new_capacity * sizeof(*reg->entities));
-        NOB_ASSERT(reg->entities);
-        reg->capacity = new_capacity;
+        size_t new_capacity = game->reg.capacity == 0 ? 256 : game->reg.capacity * 2;
+        game->reg.entities = NOB_REALLOC(game->reg.entities, new_capacity * sizeof(*game->reg.entities));
+        NOB_ASSERT(game->reg.entities);
+        game->reg.capacity = new_capacity;
     }
 
     TransformComponent transform = {
@@ -40,28 +40,26 @@ Entity registry_create_entity(Registry *reg)
     entity.transform = transform;
     entity.mesh = mesh;
     entity.editor = editor;
-    reg->entities[reg->count] = entity;
-    reg->count++;
+    game->reg.entities[game->reg.count] = entity;
+    game->reg.count++;
     
     return entity;
 }
 
-void registry_free(Registry *reg) 
+void game_free(Game *game) 
 {
-    NOB_FREE(reg->entities);
-    memset(reg, 0, sizeof(Registry));
+    NOB_FREE(game->reg.entities);
+    memset(game, 0, sizeof(Game));
 }
 
-// --- Systems Implementation ---
-
-void system_render(Registry *reg, Camera3D camera) 
+void game_render(Game *game, Camera3D *camera)
 {
-    BeginMode3D(camera);
-    for (size_t i = 0; i < reg->count; ++i) 
+    BeginMode3D(*camera);
+    for (size_t i = 0; i < game->reg.count; ++i) 
     {
-        TransformComponent *t = &reg->entities[i].transform;
-        MeshComponent *m = &reg->entities[i].mesh;
-        EditorComponent *e = &reg->entities[i].editor;
+        TransformComponent *t = &game->reg.entities[i].transform;
+        MeshComponent *m = &game->reg.entities[i].mesh;
+        EditorComponent *e = &game->reg.entities[i].editor;
         
         Color color = m->color;
         if (e->is_selected) color = GREEN;
@@ -82,9 +80,40 @@ void system_render(Registry *reg, Camera3D camera)
                 break;
         }
     }
-    DrawGrid(10, 1.0f);
+
+    //DrawGrid(10, 1.0f);
     EndMode3D();
 }
+
+void game_update(Game *game, float timeDelta)
+{
+    Vector3 position = game->reg.entities[0].transform.position;
+
+    if (IsKeyDown(KEY_W)) {
+        position.z += 10.0 * timeDelta;
+    }
+    if (IsKeyDown(KEY_S)) {
+        position.z -= 10.0 * timeDelta;
+    }
+    if (IsKeyDown(KEY_A)) {
+        position.x -= 10.0 * timeDelta;
+    }
+    if (IsKeyDown(KEY_D)) {
+        position.x += 10.0 * timeDelta;
+    }
+
+    if (IsKeyDown(KEY_Z)) {
+        position.y += 10.0 * timeDelta;
+    }
+    if (IsKeyDown(KEY_X)) {
+        position.y -= 10.0 * timeDelta;
+    }
+
+    game->reg.entities[0].transform.position = position;
+
+}
+
+// Editor related functions. will be moved
 
 static void draw_gizmo(Vector3 pos, GizmoAxis active) 
 {
@@ -144,8 +173,9 @@ static float get_axis_drag_t(Ray ray, Vector3 pos, Vector3 axis) {
     return Vector3DotProduct(d_cross_pmo, a_cross_d) / denom;
 }
 
-void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
-    Ray ray = GetScreenToWorldRay(GetMousePosition(), camera);
+void editor_update(Game *game, EditorState *editor, Camera3D *camera) {
+    Ray ray = GetScreenToWorldRay(GetMousePosition(), *camera);
+    Registry *reg = &game->reg;
     
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) 
     {
@@ -238,7 +268,7 @@ void system_editor_update(Registry *reg, EditorState *editor, Camera3D camera) {
     }
 }
 
-void system_editor_render(Registry *reg, EditorState *editor, Camera3D camera) {
+void system_editor_render(Registry *reg, EditorState *editor, Camera3D *camera) {
     if (editor->selected_entity.id != ENTITY_INVALID) 
     {
         size_t idx = 0;
@@ -254,7 +284,7 @@ void system_editor_render(Registry *reg, EditorState *editor, Camera3D camera) {
         }
         if (found) 
         {
-            BeginMode3D(camera);
+            BeginMode3D(*camera);
             draw_gizmo(reg->entities[idx].transform.position, editor->active_axis);
             EndMode3D();
         }
