@@ -19,8 +19,6 @@ typedef struct {
     char heightMap[50];
 } map_t;
 
-void ProcessInput(float timeDelta);
-
 int GetLinearFogFactor(int fogEnd, int fogStart, int z);
 
 float GetExponentialFogFactor(float fogDensity, int z);
@@ -36,5 +34,9 @@ void init_map();
 void render_map(); 
 
 void cleanup_map();
+
+int get_current_map();
+
+void change_map(int map_index);
 
 #endif

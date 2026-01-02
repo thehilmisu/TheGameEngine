@@ -25,10 +25,6 @@ float fogDensity = 0.0025;
 float fogStart = 300.0;
 float fogEnd = 600.0;
 int selectedMap = 0;
-int currentSelectedMap = 0;
-int mapSelectorMode = 0;
-
-
 
 int GetLinearFogFactor(int fogEnd, int fogStart, int z) 
 {
@@ -78,39 +74,30 @@ void LoadMaps()
     }
 }
 
-char* DropdownOptions() 
+void change_map(int map_index)
 {
-    // NUM_MAPS is 29. "mapXX;" is up to 7 characters including semicolon/null.
-    char *dropDownText = (char *)calloc(NUM_MAPS, 8);
-    if (!dropDownText) return NULL;
-
-    int offset = 0;
-    for (int i = 0; i < NUM_MAPS; i++) {
-        offset += sprintf(dropDownText + offset, "map%d", i);
-        if (i < NUM_MAPS - 1) {
-            dropDownText[offset++] = ';';
-        }
-    }
-    return dropDownText;
+    selectedMap = map_index;
+    init_map();
 }
 
+int get_current_map()
+{
+    return selectedMap;
+}
 
 void init_map()
 {
     LoadMaps();
 
-    Image colorMapImg = LoadImage(maps[selectedMap].colorMap);
-    Image heightMapImg = LoadImage(maps[selectedMap].heightMap);
+    colorMapImage = LoadImage(maps[selectedMap].colorMap);
+    heightMapImage = LoadImage(maps[selectedMap].heightMap);
 
-    if (colorMapImg.data == NULL || heightMapImg.data == NULL) {
+    if (colorMapImage.data == NULL || heightMapImage.data == NULL) {
         TraceLog(LOG_ERROR, "VOXEL: Failed to load map files. Check if 'resources' directory exists in working directory.");
     } else {
-        colorMap = LoadImageColors(colorMapImg);
-        heightMap = LoadImageColors(heightMapImg);
+        colorMap = LoadImageColors(colorMapImage);
+        heightMap = LoadImageColors(heightMapImage);
     }
-
-    UnloadImage(colorMapImg);
-    UnloadImage(heightMapImg);
 
     screenBuffer = (Color *)malloc(RENDER_WIDTH * RENDER_HEIGHT * sizeof(Color));
     if (screenBuffer) {
@@ -155,22 +142,13 @@ void render_map()
     float depthOffset = (camX * dirX + camY * dirZ);
     depthOffset -= floorf(depthOffset);
 
-    // Switch color map and height map if user chooses a different map
-    if (currentSelectedMap != selectedMap) {
-        selectedMap = currentSelectedMap;
-        Image colorMapImg = LoadImage(maps[selectedMap].colorMap);
-        Image heightMapImg = LoadImage(maps[selectedMap].heightMap);
-        
-        if (colorMap) UnloadImageColors(colorMap);
-        if (heightMap) UnloadImageColors(heightMap);
-        
-        colorMap = LoadImageColors(colorMapImg);
-        heightMap = LoadImageColors(heightMapImg);
-        
-        UnloadImage(colorMapImg);
-        UnloadImage(heightMapImg);
-    }
-
+   
+    if (colorMap) UnloadImageColors(colorMap);
+    if (heightMap) UnloadImageColors(heightMap);
+    
+    colorMap = LoadImageColors(colorMapImage);
+    heightMap = LoadImageColors(heightMapImage);
+    
     // Pre-calculate tables if needed
     if (currentFogDensity != fogDensity) {
         for (int z = 0; z < 1024; z++) {

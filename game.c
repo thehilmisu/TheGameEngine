@@ -26,7 +26,7 @@ Entity create_entity(Game *game)
         .rotation = {0, 0, 0},
         .scale = {1, 1, 1}
     };
-    
+
     MeshComponent mesh = {
         .type = MESH_CUBE,
         .color = RED
@@ -133,19 +133,21 @@ void game_render(Game *game, Camera3D *camera)
     EndMode3D();
 }
 
-float pitch = 0.0f;
-float roll = 0.0f;
-float yaw = 0.0f;
-
-void game_update(Game *game, float timeDelta)
+void handle_input(Game *game, float timeDelta)
 {
+    static float pitch = 0.0f;
+    static float roll = 0.0f;
+    static float yaw = 0.0f;
+
     Entity *player = &game->reg.entities[0];
     
     if (IsKeyDown(KEY_W)) {
         pitch += 0.6f;
+        player->transform.position.y -=  timeDelta * 30.0f;
     }
     else if (IsKeyDown(KEY_S)) {
         pitch -= 0.6f;
+        player->transform.position.y +=  timeDelta * 30.0f;
     }
     else{
         if (pitch > 0.3f) pitch -= 0.3f;
@@ -178,11 +180,15 @@ void game_update(Game *game, float timeDelta)
     // Constantly move player forward
     player->transform.position.z += 10.0f * timeDelta;
 
-    printf("%f, %f", pitch, roll);
+    // printf("%f, %f", pitch, roll);
 
 }
 
-// Editor related functions. will be moved
+void game_update(Game *game, float timeDelta)
+{
+    handle_input(game, timeDelta);
+}
+
 
 static void draw_gizmo(Vector3 pos, GizmoAxis active) 
 {

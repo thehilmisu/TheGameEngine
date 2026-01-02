@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdbool.h>
 #include <raylib.h>
 #include "game.h"
@@ -5,8 +6,14 @@
 #include "colors.h"
 #include "voxel_space_map.h"
 
-#define SCREEN_WIDTH    (1920)
-#define SCREEN_HEIGHT   (1080)
+#define NOB_IMPLEMENTATION
+#define NOB_STRIP_PREFIX
+#include "nob.h"
+
+// #define SCREEN_WIDTH    (1920)
+// #define SCREEN_HEIGHT   (1080)
+#define SCREEN_WIDTH    (1080)
+#define SCREEN_HEIGHT   (720)
 
 
 int main(void)
@@ -38,8 +45,21 @@ int main(void)
 
     init_map();
 
+    static int current_map = 0;
+
     while (!WindowShouldClose())
     {
+        // DEBUGGING
+        //
+
+        if(IsKeyReleased(KEY_M))
+        {
+            current_map = ((1 + get_current_map())  % NUM_MAPS); 
+            nob_log(NOB_INFO, "Map Changed : %d" , current_map);
+            change_map(current_map);
+        }
+
+        ////////////////////////////////////
         // Update
         game_update(&game, GetFrameTime());
         //set_camera_target(game.reg.entities[0].transform.position);
@@ -55,6 +75,9 @@ int main(void)
             game_render(&game, get_camera());
             //system_editor_render(&reg, &editor, get_camera());
             DrawFPS(10, 10);
+            char buf[256];
+            sprintf(buf, "Selected map : %d ", get_current_map());
+            DrawText(buf, 10, 30, 20, WHITE);
             
         EndDrawing();
     }

@@ -46,7 +46,6 @@ typedef struct
     EditorComponent editor;
 }Entity;
 
-
 typedef struct 
 {
     Entity *entities;
@@ -59,18 +58,10 @@ typedef struct
     Registry reg;
 }Game;
 
-// --- Registry API ---
-
 Game game_init(void);
 Entity create_entity(Game *game);
 Entity create_entity_with_model(Game *game, const char* model_path);
 void game_free(Game *game);
-
-// --- Component Helpers (using bitsets or indices, simplified here) ---
-// For this lite version, every entity will have an entry in all component arrays 
-// but we'll use a "presence" check if needed, or just assume they are there for now.
-
-// --- Systems ---
 
 typedef enum 
 {
@@ -90,6 +81,7 @@ typedef struct
 
 void game_render(Game *game, Camera3D *camera);
 void game_update(Game *game, float timeDelta);
+void handle_input(Game* game, float timeDelta);
 void editor_update(Game *game, EditorState *editor, Camera3D *camera);
 void system_editor_render(Registry *reg, EditorState *editor, Camera3D *camera);
 
