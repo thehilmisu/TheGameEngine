@@ -1,5 +1,6 @@
 #include "voxel_space_map.h"
 #include "camera.h"
+#include "raylib.h"
 #include <math.h>
 
 Color *colorMap = NULL;
@@ -7,7 +8,7 @@ Color *heightMap = NULL;
 Color *screenBuffer = NULL;
 Texture2D screenTexture = { 0 };
 Image colorMapImage = {0};
-Image heightMapImage = {0}; // LoadImage(maps[selectedMap].heightMap);
+Image heightMapImage = {0};
 
 float voxel_horizon = 100.0f;
 float voxel_tilt = 0.0f;
@@ -276,6 +277,8 @@ void cleanup_map()
     if (colorMap) UnloadImageColors(colorMap);
     if (heightMap) UnloadImageColors(heightMap);
     if (screenBuffer) free(screenBuffer);
+    UnloadImage(colorMapImage);
+    UnloadImage(heightMapImage);
     UnloadTexture(screenTexture);
 }
 
