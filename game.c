@@ -4,15 +4,12 @@
 Game game_init(void) 
 {
     Game game = {0};
+    game.player_id = ENTITY_INVALID;
     return game;
 }
 
-Entity create_entity(Game *game) 
+Entity* create_entity(Game *game, EntityType type) 
 {
-    Entity entity = {0};
-
-    entity.id = (uint32_t)(game->reg.count + 1);
-    
     if (game->reg.count >= game->reg.capacity) 
     {
         size_t new_capacity = game->reg.capacity == 0 ? 256 : game->reg.capacity * 2;
@@ -21,73 +18,73 @@ Entity create_entity(Game *game)
         game->reg.capacity = new_capacity;
     }
 
-    TransformComponent transform = {
+    Entity *entity = &game->reg.entities[game->reg.count];
+    memset(entity, 0, sizeof(Entity));
+
+    entity->id = (uint32_t)(game->reg.count + 1);
+    entity->active = true;
+    entity->type = type;
+
+    entity->transform = (TransformComponent){
         .position = {0, 0, 0},
         .rotation = {0, 0, 0},
         .scale = {1, 1, 1}
     };
 
-    MeshComponent mesh = {
+    entity->mesh = (MeshComponent){
         .type = MESH_CUBE,
         .color = RED
     };
     
-    EditorComponent editor = {
-        .is_selected = false,
-        .is_hovered = false
-    };
-    
-    entity.transform = transform;
-    entity.mesh = mesh;
-    entity.editor = editor;
-    game->reg.entities[game->reg.count] = entity;
+    if (type == ENTITY_PLAYER) {
+        game->player_id = entity->id;
+    }
+
     game->reg.count++;
-    
     return entity;
 }
 
-Entity create_entity_with_model(Game *game, const char* model_path) 
+Entity* create_entity_with_model(Game *game, EntityType type, const char* model_path) 
 {
-    Entity entity = {0};
-
-    entity.id = (uint32_t)(game->reg.count + 1);
-    
-    if (game->reg.count >= game->reg.capacity) 
-    {
-        size_t new_capacity = game->reg.capacity == 0 ? 256 : game->reg.capacity * 2;
-        game->reg.entities = NOB_REALLOC(game->reg.entities, new_capacity * sizeof(*game->reg.entities));
-        NOB_ASSERT(game->reg.entities);
-        game->reg.capacity = new_capacity;
-    }
-
-    TransformComponent transform = {
-        .position = {0, 0, 0},
-        .rotation = {0, 0, 0},
-        .scale = {1, 1, 1}
-    };
+    Entity *entity = create_entity(game, type);
     
     Model m = LoadModel(model_path);
     if (m.meshCount == 0) {
         TraceLog(LOG_ERROR, "GAME: Failed to load model from %s", model_path);
     }
-    MeshComponent mesh = {
+    entity->mesh = (MeshComponent){
         .type = MESH_MODEL,
         .color = WHITE,
         .model = m
     };
     
-    EditorComponent editor = {
-        .is_selected = false,
-        .is_hovered = false
-    };
-    
-    entity.transform = transform;
-    entity.mesh = mesh;
-    entity.editor = editor;
-    game->reg.entities[game->reg.count] = entity;
-    game->reg.count++;
-    
     return entity;
+}
+
+void remove_entity(Game *game, uint32_t id)
+{
+    for (size_t i = 0; i < game->reg.count; i++) {
+        if (game->reg.entities[i].id == id) {
+            game->reg.entities[i].active = false;
+            if (game->reg.entities[i].mesh.type == MESH_MODEL) {
+                UnloadModel(game->reg.entities[i].mesh.model);
+            }
+            break;
+        }
+    }
+}
+
+void spawn_projectile(Game *game, Vector3 position, Vector3 direction)
+{
+    Entity *proj = create_entity(game, ENTITY_PROJECTILE);
+    proj->transform.position = position;
+    proj->transform.scale = (Vector3){0.2f, 0.2f, 0.2f};
+    proj->mesh.type = MESH_CUBE;
+    proj->mesh.color = YELLOW;
+    
+    proj->projectile.direction = Vector3Normalize(direction);
+    proj->projectile.speed = 100.0f;
+    proj->projectile.lifetime = 3.0f;
 }
 
 void game_free(Game *game) 
@@ -101,9 +98,12 @@ void game_render(Game *game, Camera3D *camera)
     BeginMode3D(*camera);
     for (size_t i = 0; i < game->reg.count; ++i) 
     {
-        TransformComponent *t = &game->reg.entities[i].transform;
-        MeshComponent *m = &game->reg.entities[i].mesh;
-        EditorComponent *e = &game->reg.entities[i].editor;
+        Entity *entity = &game->reg.entities[i];
+        if (!entity->active) continue;
+
+        TransformComponent *t = &entity->transform;
+        MeshComponent *m = &entity->mesh;
+        EditorComponent *e = &entity->editor;
         
         Color color = m->color;
         if (e->is_selected) color = GREEN;
@@ -129,7 +129,6 @@ void game_render(Game *game, Camera3D *camera)
         }
     }
 
-    //DrawGrid(10, 1.0f);
     EndMode3D();
 }
 
@@ -139,7 +138,15 @@ void handle_input(Game *game, float timeDelta)
     static float roll = 0.0f;
     static float yaw = 0.0f;
 
-    Entity *player = &game->reg.entities[0];
+    Entity *player = NULL;
+    for (size_t i = 0; i < game->reg.count; i++) {
+        if (game->reg.entities[i].id == game->player_id && game->reg.entities[i].active) {
+            player = &game->reg.entities[i];
+            break;
+        }
+    }
+
+    if (!player) return;
     
     if (IsKeyDown(KEY_W)) {
         pitch += 0.6f;
@@ -168,25 +175,47 @@ void handle_input(Game *game, float timeDelta)
         else if (roll < 0.0f) roll += 0.5f;
     }
 
-    if (IsKeyDown(KEY_Z)) {
-       // position.y += 10.0 * timeDelta;
-    }
-    if (IsKeyDown(KEY_X)) {
-       // position.y -= 10.0 * timeDelta;
+    if (IsKeyPressed(KEY_SPACE)) {
+        // Calculate plane's actual forward direction based on pitch and roll
+        Matrix mat = MatrixRotateXYZ((Vector3){ DEG2RAD*pitch, DEG2RAD*yaw, DEG2RAD*roll });
+        // Forward vector in Matrix is Column 2 (Index 8, 9, 10)
+        Vector3 forward = { mat.m8, mat.m9, mat.m10 }; 
+        
+        // Spawn slightly in front of the player to avoid clipping
+        Vector3 spawnPos = player->transform.position;
+        spawnPos = Vector3Add(spawnPos, Vector3Scale(forward, 2.0f));
+        
+        // Apply visual correction for the voxel map perspective
+        // The camera is pitched down significantly (~26 deg), but the voxel map horizon 
+        // implies a shallower pitch (~14 deg). We pitch the bullet down to match.
+        forward.y -= 0.2f;
+        
+        spawn_projectile(game, spawnPos, forward);
     }
 
     player->mesh.model.transform = MatrixRotateXYZ((Vector3){ DEG2RAD*pitch, DEG2RAD*yaw, DEG2RAD*roll });
     
     // Constantly move player forward
     player->transform.position.z += 10.0f * timeDelta;
-
-    // printf("%f, %f", pitch, roll);
-
 }
 
 void game_update(Game *game, float timeDelta)
 {
     handle_input(game, timeDelta);
+
+    for (size_t i = 0; i < game->reg.count; i++) {
+        Entity *entity = &game->reg.entities[i];
+        if (!entity->active) continue;
+
+        if (entity->type == ENTITY_PROJECTILE) {
+            entity->transform.position = Vector3Add(entity->transform.position,                     
+                Vector3Scale(entity->projectile.direction, entity->projectile.speed * timeDelta));
+            entity->projectile.lifetime -= timeDelta;
+            if (entity->projectile.lifetime <= 0) {
+                entity->active = false;
+            }
+        }
+    }
 }
 
 

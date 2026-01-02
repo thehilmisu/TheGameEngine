@@ -38,13 +38,31 @@ typedef struct
     bool is_hovered;
 } EditorComponent;
 
+typedef enum
+{
+    ENTITY_NONE,
+    ENTITY_PLAYER,
+    ENTITY_PROJECTILE,
+    ENTITY_SCENERY
+} EntityType;
+
+typedef struct
+{
+    Vector3 direction;
+    float speed;
+    float lifetime;
+} ProjectileComponent;
+
 typedef struct
 {
     uint32_t id;
+    bool active;
+    EntityType type;
     TransformComponent transform;
     MeshComponent mesh;
+    ProjectileComponent projectile;
     EditorComponent editor;
-}Entity;
+} Entity;
 
 typedef struct 
 {
@@ -56,11 +74,14 @@ typedef struct
 typedef struct
 {
     Registry reg;
-}Game;
+    uint32_t player_id;
+} Game;
 
 Game game_init(void);
-Entity create_entity(Game *game);
-Entity create_entity_with_model(Game *game, const char* model_path);
+Entity* create_entity(Game *game, EntityType type);
+Entity* create_entity_with_model(Game *game, EntityType type, const char* model_path);
+void remove_entity(Game *game, uint32_t id);
+void spawn_projectile(Game *game, Vector3 position, Vector3 direction);
 void game_free(Game *game);
 
 typedef enum 

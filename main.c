@@ -35,10 +35,11 @@ int main(void)
     SetTargetFPS(60);
 
     // Add some initial entities (MUST BE AFTER InitWindow for models to load)
-    create_entity_with_model(&game, "resources/models/aircraft.glb");
-    game.reg.entities[0].transform.position = (Vector3){512, 150, 512};
-    game.reg.entities[0].mesh.color = WHITE;
-    player = &game.reg.entities[0];
+    player = create_entity_with_model(&game, ENTITY_PLAYER, "resources/models/aircraft.glb");
+    if (player) {
+        player->transform.position = (Vector3){512, 150, 512};
+        player->mesh.color = WHITE;
+    }
 
     //set_camera_target(game.reg.entities[0].transform.position);
     set_camera_target(player->transform.position);
