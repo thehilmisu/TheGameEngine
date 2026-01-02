@@ -1,4 +1,5 @@
 #include "camera.h"
+#include "raylib.h"
 
 static Camera3D camera = {0};
 
@@ -15,6 +16,9 @@ void update_camera(void)
 {
     // Orbital camera for editor navigation
     //UpdateCamera(&camera, CAMERA_FREE);
+    #if 0
+        printf("Hakan");
+    #endif
 }
 
 void set_camera_position(Vector3 pos)

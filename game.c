@@ -133,31 +133,52 @@ void game_render(Game *game, Camera3D *camera)
     EndMode3D();
 }
 
+float pitch = 0.0f;
+float roll = 0.0f;
+float yaw = 0.0f;
+
 void game_update(Game *game, float timeDelta)
 {
-    Vector3 position = game->reg.entities[0].transform.position;
-
+    Entity *player = &game->reg.entities[0];
+    
     if (IsKeyDown(KEY_W)) {
-        position.z += 10.0 * timeDelta;
+        pitch += 0.6f;
     }
-    if (IsKeyDown(KEY_S)) {
-        position.z -= 10.0 * timeDelta;
+    else if (IsKeyDown(KEY_S)) {
+        pitch -= 0.6f;
     }
+    else{
+        if (pitch > 0.3f) pitch -= 0.3f;
+        else if (pitch < -0.3f) pitch += 0.3f;
+    }
+
     if (IsKeyDown(KEY_A)) {
-        position.x -= 10.0 * timeDelta;
+        roll -=1.0f;
+        player->transform.position.x +=  timeDelta * 30.0f;
     }
-    if (IsKeyDown(KEY_D)) {
-        position.x += 10.0 * timeDelta;
+    else if (IsKeyDown(KEY_D)) {
+        roll += 1.0f;
+        player->transform.position.x -=  timeDelta * 30.0f;
+    }
+    else
+    {
+        if (roll > 0.0f) roll -= 0.5f;
+        else if (roll < 0.0f) roll += 0.5f;
     }
 
     if (IsKeyDown(KEY_Z)) {
-        position.y += 10.0 * timeDelta;
+       // position.y += 10.0 * timeDelta;
     }
     if (IsKeyDown(KEY_X)) {
-        position.y -= 10.0 * timeDelta;
+       // position.y -= 10.0 * timeDelta;
     }
 
-    game->reg.entities[0].transform.position = position;
+    player->mesh.model.transform = MatrixRotateXYZ((Vector3){ DEG2RAD*pitch, DEG2RAD*yaw, DEG2RAD*roll });
+    
+    // Constantly move player forward
+    player->transform.position.z += 10.0f * timeDelta;
+
+    printf("%f, %f", pitch, roll);
 
 }
 

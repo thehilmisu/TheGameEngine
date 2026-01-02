@@ -1,0 +1,4 @@
+-I.
+-Iraylib-5.5_macos/include
+-Wall
+-Wextra
