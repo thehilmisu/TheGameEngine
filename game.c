@@ -1,5 +1,6 @@
 #include "game.h"
 #include <raymath.h>
+#include <rlgl.h>
 
 Game game_init(void) 
 {
@@ -152,7 +153,8 @@ void game_render(Game *game, Camera3D *camera)
                 DrawPlane(t->position, (Vector2){t->scale.x, t->scale.z}, color);
                 break;
             case MESH_MODEL:
-                DrawModel(m->model, t->position, t->scale.x, WHITE);
+                DrawModel(m->model, t->position, t->scale.x, m->color);
+                DrawModelWires(m->model, t->position, t->scale.x, PURPLE);
                 break;
 
         }
@@ -225,7 +227,7 @@ void handle_input(Game *game, float timeDelta)
     player->mesh.model.transform = MatrixRotateXYZ((Vector3){ DEG2RAD*pitch, DEG2RAD*yaw, DEG2RAD*roll });
     
     // Constantly move player forward
-    player->transform.position.z += 10.0f * timeDelta;
+    // player->transform.position.z += 10.0f * timeDelta;
 }
 
 void game_update(Game *game, float timeDelta)

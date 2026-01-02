@@ -88,6 +88,32 @@ int get_current_map()
 
 void init_map()
 {
+    // Clean up previous map if it exists
+    if (colorMap) {
+        UnloadImageColors(colorMap);
+        colorMap = NULL;
+    }
+    if (heightMap) {
+        UnloadImageColors(heightMap);
+        heightMap = NULL;
+    }
+    if (colorMapImage.data) {
+        UnloadImage(colorMapImage);
+        colorMapImage = (Image){0};
+    }
+    if (heightMapImage.data) {
+        UnloadImage(heightMapImage);
+        heightMapImage = (Image){0};
+    }
+    if (screenBuffer) {
+        free(screenBuffer);
+        screenBuffer = NULL;
+    }
+    if (screenTexture.id > 0) {
+        UnloadTexture(screenTexture);
+        screenTexture = (Texture2D){0};
+    }
+
     LoadMaps();
 
     colorMapImage = LoadImage(maps[selectedMap].colorMap);
@@ -95,27 +121,29 @@ void init_map()
 
     if (colorMapImage.data == NULL || heightMapImage.data == NULL) {
         TraceLog(LOG_ERROR, "VOXEL: Failed to load map files. Check if 'resources' directory exists in working directory.");
-    } else {
-        colorMap = LoadImageColors(colorMapImage);
-        heightMap = LoadImageColors(heightMapImage);
-    }
-
-    screenBuffer = (Color *)malloc(RENDER_WIDTH * RENDER_HEIGHT * sizeof(Color));
-    if (screenBuffer) {
-        for (int i = 0; i < RENDER_WIDTH * RENDER_HEIGHT; i++) screenBuffer[i] = BLACK;
+        return;
     }
     
-    // Create an image that references the screenBuffer
-    // We will use this to initialize the texture
-    Image screenImage = {
-        .data = screenBuffer,
-        .width = RENDER_WIDTH,
-        .height = RENDER_HEIGHT,
-        .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
-        .mipmaps = 1
-    };
+    colorMap = LoadImageColors(colorMapImage);
+    heightMap = LoadImageColors(heightMapImage);
 
-    screenTexture = LoadTextureFromImage(screenImage);
+    screenBuffer = (Color *)malloc(RENDER_WIDTH * RENDER_HEIGHT * sizeof(Color));
+    if (!screenBuffer) {
+        TraceLog(LOG_ERROR, "VOXEL: Failed to allocate screenBuffer");
+        return;
+    }
+    
+    for (int i = 0; i < RENDER_WIDTH * RENDER_HEIGHT; i++) {
+        screenBuffer[i] = BLACK;
+    }
+    
+    // Create the texture directly with proper dimensions
+    // GenImageColor creates a new image that Raylib owns
+    Image tempImage = GenImageColor(RENDER_WIDTH, RENDER_HEIGHT, BLACK);
+    screenTexture = LoadTextureFromImage(tempImage);
+    UnloadImage(tempImage); // Safe to unload since texture is now on GPU
+    
+    TraceLog(LOG_INFO, "VOXEL: Map initialized successfully");
 }
 
 void render_map() 
@@ -143,13 +171,6 @@ void render_map()
     float depthOffset = (camX * dirX + camY * dirZ);
     depthOffset -= floorf(depthOffset);
 
-   
-    if (colorMap) UnloadImageColors(colorMap);
-    if (heightMap) UnloadImageColors(heightMap);
-    
-    colorMap = LoadImageColors(colorMapImage);
-    heightMap = LoadImageColors(heightMapImage);
-    
     // Pre-calculate tables if needed
     if (currentFogDensity != fogDensity) {
         for (int z = 0; z < 1024; z++) {

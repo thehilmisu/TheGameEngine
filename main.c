@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <raylib.h>
+#include <raymath.h>
 #include "game.h"
 #include "camera.h"
 #include "colors.h"
+#include "plants.h"
 #include "voxel_space_map.h"
 
 #define NOB_IMPLEMENTATION
@@ -45,8 +47,29 @@ int main(void)
     set_camera_target(player->transform.position);
 
     init_map();
+    TraceLog(LOG_INFO, "Map initialized successfully");
 
     static int current_map = 0;
+    TraceLog(LOG_INFO, "About to enter game loop");
+    
+
+    TraceLog(LOG_INFO, "Creating tree model...");
+    Model treeModel = create_tree_model(1024);
+    TraceLog(LOG_INFO, "Tree model created");
+    
+    // Set material color for the tree
+    if (treeModel.materialCount > 0) {
+        treeModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].color = GREEN;
+        TraceLog(LOG_INFO, "Tree material color set to GREEN");
+    }
+    
+    Entity *tree = create_entity(&game, ENTITY_SCENERY);
+    tree->mesh.type = MESH_MODEL;
+    tree->mesh.model = treeModel;
+    tree->mesh.color = GREEN;  // Make it bright green so we can see it
+    tree->transform.position = (Vector3){ 520, 150, 550};  // Closer to player
+    TraceLog(LOG_INFO, "Tree entity created at position (520, 150, 550)");
+    
 
     while (!WindowShouldClose())
     {
@@ -74,13 +97,13 @@ int main(void)
             render_map();
             
             game_render(&game, get_camera());
-            //system_editor_render(&reg, &editor, get_camera());
+            
             DrawFPS(10, 10);
             char buf[256];
             sprintf(buf, "Selected map : %d ", get_current_map());
             DrawText(buf, 10, 30, 20, WHITE);
             sprintf(buf, "Entity count : %zu ", game.reg.count);
-            DrawText(buf, 10, 50, 20, WHITE);
+            DrawText(buf, 10, 70, 20, WHITE);
             
         EndDrawing();
     }
