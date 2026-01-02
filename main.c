@@ -79,6 +79,8 @@ int main(void)
             char buf[256];
             sprintf(buf, "Selected map : %d ", get_current_map());
             DrawText(buf, 10, 30, 20, WHITE);
+            sprintf(buf, "Entity count : %zu ", game.reg.count);
+            DrawText(buf, 10, 50, 20, WHITE);
             
         EndDrawing();
     }

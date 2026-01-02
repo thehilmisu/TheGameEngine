@@ -61,14 +61,43 @@ Entity* create_entity_with_model(Game *game, EntityType type, const char* model_
     return entity;
 }
 
+void remove_entity_at_index(Game *game, size_t index)
+{
+    if (index >= game->reg.count) return;
+
+    Entity *entity = &game->reg.entities[index];
+    
+    // Cleanup resources
+    if (entity->mesh.type == MESH_MODEL) {
+        UnloadModel(entity->mesh.model);
+    }
+
+    // Swap with last element
+    if (index < game->reg.count - 1) {
+        game->reg.entities[index] = game->reg.entities[game->reg.count - 1];
+    }
+
+    game->reg.count--;
+
+    // Resize array if it's mostly empty (e.g., less than 1/4 full)
+    // We keep a minimum capacity of 256
+    if (game->reg.count > 0 && game->reg.count < game->reg.capacity / 4 && game->reg.capacity > 256) {
+        size_t new_capacity = game->reg.capacity / 2;
+        if (new_capacity < 256) new_capacity = 256;
+        
+        Entity *new_entities = NOB_REALLOC(game->reg.entities, new_capacity * sizeof(Entity));
+        if (new_entities) {
+            game->reg.entities = new_entities;
+            game->reg.capacity = new_capacity;
+        }
+    }
+}
+
 void remove_entity(Game *game, uint32_t id)
 {
     for (size_t i = 0; i < game->reg.count; i++) {
         if (game->reg.entities[i].id == id) {
-            game->reg.entities[i].active = false;
-            if (game->reg.entities[i].mesh.type == MESH_MODEL) {
-                UnloadModel(game->reg.entities[i].mesh.model);
-            }
+            remove_entity_at_index(game, i);
             break;
         }
     }
@@ -205,15 +234,18 @@ void game_update(Game *game, float timeDelta)
 
     for (size_t i = 0; i < game->reg.count; i++) {
         Entity *entity = &game->reg.entities[i];
-        if (!entity->active) continue;
+
+        if (!entity->active) {
+            remove_entity_at_index(game, i);
+            i--; // Check the same index again as it now contains a new entity
+            continue;
+        }
 
         if (entity->type == ENTITY_PROJECTILE) {
             entity->transform.position = Vector3Add(entity->transform.position,                     
                 Vector3Scale(entity->projectile.direction, entity->projectile.speed * timeDelta));
             entity->projectile.lifetime -= timeDelta;
-            if (entity->projectile.lifetime <= 0) {
-                entity->active = false;
-            }
+            if (entity->projectile.lifetime <= 0) entity->active = false;
         }
     }
 }
