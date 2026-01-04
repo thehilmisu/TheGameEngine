@@ -303,3 +303,23 @@ void cleanup_map()
     UnloadTexture(screenTexture);
 }
 
+
+float get_terrain_height(float world_x, float world_z)
+{
+    if (!heightMap) return 0.0f;
+    
+    int map_x = ((int)world_x) & (MAP_N - 1);
+    int map_z = ((int)world_z) & (MAP_N - 1);
+    
+    return (float)heightMap[map_z * MAP_N + map_x].r;
+}
+
+Color get_terrain_color(float world_x, float world_z)
+{
+    if (!colorMap) return BLACK;
+    
+    int map_x = ((int)world_x) & (MAP_N - 1);
+    int map_z = ((int)world_z) & (MAP_N - 1);
+    
+    return colorMap[map_z * MAP_N + map_x];
+}

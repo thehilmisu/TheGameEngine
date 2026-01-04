@@ -42,8 +42,7 @@ int main(void)
         player->transform.position = (Vector3){512, 150, 512};
         player->mesh.color = WHITE;
     }
-
-    //set_camera_target(game.reg.entities[0].transform.position);
+    
     set_camera_target(player->transform.position);
 
     init_map();
@@ -52,23 +51,16 @@ int main(void)
     static int current_map = 0;
     TraceLog(LOG_INFO, "About to enter game loop");
     
-
-    TraceLog(LOG_INFO, "Creating tree model...");
-    Model treeModel = create_tree_model(1024);
-    TraceLog(LOG_INFO, "Tree model created");
-    
-    // Set material color for the tree
-    if (treeModel.materialCount > 0) {
-        treeModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].color = GREEN;
-        TraceLog(LOG_INFO, "Tree material color set to GREEN");
+    // Load tree model once (separate from entities, will be shared)
+    TraceLog(LOG_INFO, "Loading tree model...");
+    Model treeModel = LoadModel("resources/models/leaf_tree_-_ps1_low_poly.glb");
+    if (treeModel.meshCount > 0) {
+        TraceLog(LOG_INFO, "Tree model loaded successfully");
+        // Spawn trees across the terrain
+        spawn_trees_on_terrain(&game, treeModel, 50, current_map);
+    } else {
+        TraceLog(LOG_ERROR, "Failed to load tree model");
     }
-    
-    Entity *tree = create_entity(&game, ENTITY_SCENERY);
-    tree->mesh.type = MESH_MODEL;
-    tree->mesh.model = treeModel;
-    tree->mesh.color = GREEN;  // Make it bright green so we can see it
-    tree->transform.position = (Vector3){ 520, 150, 550};  // Closer to player
-    TraceLog(LOG_INFO, "Tree entity created at position (520, 150, 550)");
     
 
     while (!WindowShouldClose())
@@ -80,7 +72,15 @@ int main(void)
         {
             current_map = ((1 + get_current_map())  % NUM_MAPS); 
             nob_log(NOB_INFO, "Map Changed : %d" , current_map);
+            
+            // Clear existing trees
+            clear_scenery(&game);
+            
+            // Change map
             change_map(current_map);
+            
+            // Respawn trees for new map
+            spawn_trees_on_terrain(&game, treeModel, 50, current_map);
         }
 
         ////////////////////////////////////
@@ -108,6 +108,8 @@ int main(void)
         EndDrawing();
     }
 
+    // Cleanup
+    UnloadModel(treeModel);
     CloseWindow();
     cleanup_map();
     game_free(&game);

@@ -106,5 +106,11 @@ void handle_input(Game* game, float timeDelta);
 void editor_update(Game *game, EditorState *editor, Camera3D *camera);
 void system_editor_render(Registry *reg, EditorState *editor, Camera3D *camera);
 
+// Procedurally spawn trees across the terrain
+void spawn_trees_on_terrain(Game *game, Model tree_model, int count, unsigned int seed);
+
+// Clear all scenery entities (trees, etc.)
+void clear_scenery(Game *game);
+
 #endif // GAME_H
 

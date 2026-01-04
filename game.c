@@ -1,6 +1,8 @@
 #include "game.h"
+#include "voxel_space_map.h"
 #include <raymath.h>
 #include <rlgl.h>
+#include <stdlib.h>
 
 Game game_init(void) 
 {
@@ -69,7 +71,8 @@ void remove_entity_at_index(Game *game, size_t index)
     Entity *entity = &game->reg.entities[index];
     
     // Cleanup resources
-    if (entity->mesh.type == MESH_MODEL) {
+    // Don't unload models for scenery entities since they share the same model
+    if (entity->mesh.type == MESH_MODEL && entity->type != ENTITY_SCENERY) {
         UnloadModel(entity->mesh.model);
     }
 
@@ -429,3 +432,90 @@ void system_editor_render(Registry *reg, EditorState *editor, Camera3D *camera) 
     }
 }
 
+void clear_scenery(Game *game)
+{
+    // Remove all scenery entities
+    for (size_t i = 0; i < game->reg.count; i++) {
+        Entity *entity = &game->reg.entities[i];
+        if (entity->type == ENTITY_SCENERY) {
+            remove_entity_at_index(game, i);
+            i--; // Check the same index again
+        }
+    }
+}
+
+void spawn_trees_on_terrain(Game *game, Model tree_model, int count, unsigned int seed)
+{
+    TraceLog(LOG_INFO, "GAME: Spawning %d trees on terrain (seed: %u)", count, seed);
+    
+    srand(seed);
+    
+    // Map bounds (assuming 1024x1024 heightmap)
+    const float map_size = 1024.0f;
+    const float min_height = 1.0f;  // Don't place trees in water
+    const float max_height = 10.0f; // Don't place trees on mountains
+    const float min_spacing = 30.0f; // Minimum distance between trees
+    
+    int placed = 0;
+    int attempts = 0;
+    const int max_attempts = count * 10; // Give up after too many failed attempts
+    
+    // Keep track of placed tree positions for spacing check
+    Vector3 *tree_positions = (Vector3*)malloc(count * sizeof(Vector3));
+    
+    while (placed < count && attempts < max_attempts) {
+        attempts++;
+        
+        // Random position on map
+        float x = ((float)rand() / RAND_MAX) * map_size;
+        float z = ((float)rand() / RAND_MAX) * map_size;
+        
+        // Get terrain height at this position
+        float height = get_terrain_height(x, z);
+        
+        // Check if height is suitable
+        if (height < min_height || height > max_height) {
+            continue;
+        }
+        
+        // Check spacing with other trees
+        bool too_close = false;
+        for (int i = 0; i < placed; i++) {
+            float dx = x - tree_positions[i].x;
+            float dz = z - tree_positions[i].z;
+            float dist_sq = dx*dx + dz*dz;
+            if (dist_sq < min_spacing * min_spacing) {
+                too_close = true;
+                break;
+            }
+        }
+        
+        if (too_close) {
+            continue;
+        }
+        
+        // Place the tree!
+        Entity *tree = create_entity(game, ENTITY_SCENERY);
+        tree->mesh.type = MESH_MODEL;
+        tree->mesh.model = tree_model; // Copy the model reference
+        tree->mesh.color = WHITE;
+        
+        // Position at terrain height
+        tree->transform.position = (Vector3){ x, height, z };
+        // tree->transform.position = (Vector3){ 512, 150, 550 };
+        
+        // Random rotation around Y axis
+        tree->transform.rotation.y = ((float)rand() / RAND_MAX) * 360.0f;
+        
+        // Random scale variation (0.8 to 1.2)
+        float scale = 0.8f + ((float)rand() / RAND_MAX) * 0.4f;
+        tree->transform.scale = (Vector3){ scale, scale, scale };
+        
+        // Store position
+        tree_positions[placed] = tree->transform.position;
+        placed++;
+    }
+    
+    // free(tree_positions);    
+    TraceLog(LOG_INFO, "GAME: Successfully placed %d trees (attempts: %d)", placed, attempts);
+}

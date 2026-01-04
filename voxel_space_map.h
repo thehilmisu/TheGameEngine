@@ -39,4 +39,10 @@ int get_current_map();
 
 void change_map(int map_index);
 
+// Get terrain height at world position (returns height value 0-255)
+float get_terrain_height(float world_x, float world_z);
+
+// Get color at world position
+Color get_terrain_color(float world_x, float world_z);
+
 #endif
